@@ -1,6 +1,4 @@
 
-
-
 #EXERCISE: Researchers are interested in detecting SNPs associated with colon cancer (variable cascon of ’colon.txt’ ﬁle).
 #To address this question, they performed a GWAS using DNA information about 2312 individuals.
 #Genotype information (a random selection of 100,000 SNPs from the whole genome) is available in plink format (ﬁles ’colon.bed’, ’colon.bim’, ’colon.fam’ that are already available on Biocloud in the folder ’Data for exercises’).
