@@ -1,0 +1,315 @@
+---
+title: "Main Figures"
+author: "Alberto Dominguez"
+output:
+  pdf_document:
+    fig_width: 7
+    fig_height: 4
+---
+
+
+***
+
+#1.Raw intensities
+
+```{r echo=FALSE, include = FALSE}
+
+library(xcms)
+
+library(reshape)
+library(ggplot2)
+library(gridExtra)
+
+setwd("/home/biocloud/taskmetab")
+
+list.files(pattern='[.]mzXML',recursive=TRUE)
+myraw_basal<-xcmsRaw(list.files(pattern='[.]mzXML',recursive=TRUE)[1])
+myraw_treated <- xcmsRaw(list.files(pattern = '[.]mzXML', recursive = TRUE)[14])
+```
+
+```{r echo=FALSE }
+plotRaw(myraw_basal,mzrange=c(600,750),rtrange=c(500,1200),log=TRUE,title='Raw Basal Data')
+plotRaw(myraw_treated,mzrange=c(600,750),rtrange=c(500,1200),log=TRUE,title='Raw Treated Data')
+
+```
+
+Raw intensities of basal and treated conditions for a mz range of 600 to 750 and a retention time of 500 to 1200 seconds.
+
+
+#2.TICs for BASAL and TREATED conditions
+
+```{r echo=FALSE}
+par(mfrow=c(1,2))
+xcms::plotTIC(myraw_treated)
+title(sub= "TREATED", col.sub = "darkmagenta")
+xcms::plotTIC(myraw_basal)
+title(sub= "BASAL", col.sub = "skyblue4")
+```
+
+This is the two dimensional representation of the original data, most commonly used to explore LC/MS. The so-called Total Ion Chromatogram or TIC is yielded by summarizing intensities of all mass spectral peaks detected at a certain time scan. This representation allows us to have an overview of the overall chromatography performance comparing two samples, a basal vs a treated, of the two experimental conditions. About the 500 seconds we find the greatest difference among the conditions. It seems that the treatment induce the absence of some metabolites due to a heavy decrease of the intensity peaks around this time. Moreover, the presence of a single peak around the 1100-1200 seconds that reaches 1.0e+07 of intensity may be a consequence of the treatment too. 
+
+#3. EIC by experimental conditions
+
+```{r echo=FALSE}
+
+plotEIC(myraw_basal,mzrange=c(126.0206,126.0232))
+title(sub= "BASAL", col.sub = "red")
+plotEIC(myraw_treated,mzrange=c(126.0206,126.0232)) 
+title(sub= "TREATED", col.sub = "red")
+
+```
+
+The Extracted Ion Chromatogram (EIC) shows the intensity of desired m/z, in this case 126.0206-126.0232, during all the time course of the chromatography. 
+
+
+#4. Sorted intensities and intensity distribution
+
+```{r echo=FALSE, include = FALSE}
+
+load('finalxsetobject.Rdata')
+mzrttable <- data.frame(finalxset@groups)
+
+#Restrict to features found in at least 80% of samples in a group
+
+t <- which(mzrttable$BASAL>=10 | mzrttable$TREATED>=8)
+ftrtable <- mzrttable[t,]
+
+rownames(ftrtable) <- groupnames(finalxset)[t]
+X1 <- groupval(finalxset, value = "maxo")[t,]
+
+# Get names of mZRT features
+
+rownames(X1) <- groupnames(finalxset)[t]
+
+# Define experimental groups
+
+class <- as.factor(finalxset@phenoData$class)
+
+#Compute the mean intensities for each group
+
+meanintensities <- t(apply(X1,1, function(x) tapply(x,class,mean)))
+rownames(meanintensities) <- groupnames(finalxset)[t]
+
+
+#Stablish intensity threshold value
+
+threshold <- 5000
+
+# Getting number of features with mean intensity above our threshold in at least one of the groups.
+
+idx_i <- rownames(meanintensities[apply(meanintensities,1,function(x) any(x>threshold)== TRUE),])
+
+
+## CVs 20%
+
+library(raster) # In library raster you find the function to calculate the coefficient of variation
+
+#Create a Data Frame containing intensity data
+
+D <- data.frame(X1)
+
+cl1 <- rep(c("Sample"), times = c(22))
+
+
+CV <- t(apply(D,1, function(x) tapply(x,cl1, cv)))
+idx_CV <- colnames (CV) [CV > 20]
+
+Ib <- intersect(idx_i, idx_CV)
+M2<-apply(meanintensities,2,sort,decreasing=TRUE)
+
+
+M2plot<-melt(M2)
+names(M2plot)<-c("Features","group","Intensity")
+
+```
+
+```{r echo=FALSE , warning=FALSE}
+
+iplot1<-ggplot(data=M2plot,aes(x=Features,y=Intensity,colour=group))+
+  geom_line()+
+  geom_hline(yintercept= threshold,linetype=2)+
+  scale_y_log10()+
+  labs(y="Intensity",x="# mZRT Features",title="Intensity")
+
+iplot2<-ggplot(data=M2plot,aes(x=Intensity,fill=group))+
+  geom_density(alpha=0.3)+
+  scale_x_log10()+
+  labs(x="log10(Intensity)",title="Intensity Distribution")
+
+
+grid.arrange(iplot1,iplot2,nrow=2)
+```
+
+
+The distribution of the intensities is represented above. In the first plot we observe a dashed line that depicts an intentional separation between metabolites to be sure that a correct future MS/MS experiment can be done. This threshold is completely arbitrary and is set to 5000 counts due to previous experience. The putative metabolites that fit this condition are those above the line. In the second plot, is observed how both experimental conditions follow similar behaviour in data distribution.
+
+
+#5. Venn-Diagram 
+
+```{r echo=FALSE, include=FALSE}
+library(VennDiagram)
+```
+
+```{r echo=FALSE, warning=FALSE}
+
+
+
+draw.triple.venn(area1 = length(Ib), area2 = dim(ftrtable)[1], area3 = dim(mzrttable)[1], n12 = length(Ib), n23 = dim(ftrtable)[1], n13 =length(Ib), cat.dist = c(0.01, 0, 0.025),
+                 n123 =length(Ib), lty=c(1,1,1), lwd=c(4,4,4),col=c("springgreen4", "yellow", "lightblue"),cat.col = c('black','blue','lightblue'), category = c('INTENSITY and QC', '80% RULE', 'INITIAL'),
+                 fill = c("springgreen4", "yellow", "lightblue"), rotation.degree = 90,cat.pos = c(-40, 40, 0), cat.cex = c(1,2,3))
+
+```
+
+
+The representation of above Venn-Diagram, aims to compose the progression of filtering features in the step before the statistical analysis. We denote an initial number of 7523 features detected by XCMS, if we add the 3 values of the plot we obtain this number. After applying the 80% rule the number of features is reduced till 4725, that are those with presence in 80% of samples in at least one of the experimental groups. The last cluster of this diagram is the one performed by the intensity and quality control criteria. We see clearly how is more stringent than the previous due to the lost of more than four thousands features ending with a quite feasible number of 556 features to carry on with statistical analysis.
+
+
+#6. PCA
+
+```{r echo=FALSE, include = FALSE}
+D1 <- data.frame(t(D))
+
+D1.1 <- subset(D1, select = Ib)
+
+
+D1norm<-data.frame(apply(D1.1,2,norm<-function(x) (x/max(x))))
+
+
+pca <- prcomp(D1norm)
+
+
+summary(pca)$importance[,1:6] 
+
+
+
+scores <- data.frame(pca$x[,c("PC1", "PC2")])
+scores$class<-class
+
+
+lab <- as.numeric(gsub("\\D","", rownames(D1.1)))
+
+```
+
+```{r echo=FALSE}
+
+ggplot(data=scores,aes(x=PC1, y=PC2, colour=class))+
+  geom_point(alpha = I(0.7), size=10)+
+  geom_text(data=scores, mapping=aes(x=PC1, y=PC2, label=lab),
+            size=4, vjust=3, hjust=0.5)+
+  geom_hline(yintercept = 0)+
+  geom_vline(xintercept = 0)
+```
+
+The PCA is usually used to be aware of some tendency in our data, that is, if it clusters somehow. In this case we realise how the different samples tend to group by experimental condition, basal and treatment, getting closer to PCA1 the basal ones and around PCA2 the treatment ones. It is useful also to detect data outliers and in our case two samples seem to be candidates for it. Further analysis has to be done to conclude if this two samples fit with this denomination. 
+
+
+
+```{r echo=FALSE, include = FALSE}
+library(outliers)
+
+
+outlierst <- scores(scores[,-3], type="t", prob=0.95)
+outlierst 
+
+outliersz <- scores(scores[,-3], type="z", prob=0.95)
+outliersz
+
+
+mask.out<- rownames(scores[c(1,12),]) 
+mask.out
+
+F_D1norm <- D1norm [!(rownames(D1norm) %in% mask.out),]
+
+
+f_pca <- prcomp(F_D1norm)
+
+
+summary(f_pca)$importance[,1:6] 
+
+
+f_scores <- data.frame(f_pca$x[,c("PC1", "PC2")])
+f_scores$class<-class[3:22]
+
+f_lab <- as.numeric(gsub("\\D","", rownames(F_D1norm)))
+
+```
+
+```{r echo=FALSE}
+
+ggplot(data=f_scores,aes(x=PC1, y=PC2, colour=class))+
+  geom_point(alpha = I(0.7), size=10)+
+  geom_text(data=f_scores, mapping=aes(x=PC1, y=PC2, label=f_lab),
+            size=4, vjust=3, hjust=0.5)+
+  geom_hline(yintercept = 0)+
+  geom_vline(xintercept = 0)
+```
+
+
+After removing above named outliers, subsequent PCA is carried out. It is observed how data tends to cluster together by experimental condition but in a less dense way or in a more disperse manner than in previous representation. 
+
+
+#7. Volcano Plot
+
+
+```{r echo=FALSE, include = FALSE}
+
+gr <- as.factor(f_scores$class)
+
+v.test.vector <-apply(F_D1norm,2,function(x){var.test(x~gr)$p.value})
+
+length(which(v.test.vector<0.05))
+
+                
+t.test.vector <- apply(F_D1norm,2,function(x){t.test(x~gr, var.equal = FALSE)$p.value})
+
+p.val.adj <- p.adjust(t.test.vector,"fdr")
+
+fc.test<-function(d,classvector){
+  means<-apply(d,2,function(x)tapply(x, classvector, mean))
+  means<-t(means)
+  case<-means[,"case"];control<-means[,"control"]
+  logFC<-log2(case/control)
+  FC<-case/control;
+  FC2<--control/case
+  FC[FC<1]<-FC2[FC<1]
+  fc.res<-data.frame(cbind(FC, logFC))
+  return(fc.res)
+}
+
+
+
+gr2<-as.character(gr)
+gr2[gr2=="BASAL"]<-"control"
+gr2[gr2=="TREATED"]<-"case"
+
+
+
+fc.res<-fc.test(F_D1norm,gr2)
+R1<-data.frame(fc.res,p.val.adj)
+R1$threshold<-as.factor(abs(R1$FC)>2&R1$p.val.adj<0.05)
+
+```
+
+
+
+```{r echo=FALSE, warning=FALSE}
+p1 <- ggplot(data=R1, aes(x=R1$logFC, y=-log10(R1$p.val.adj),
+                          colour=threshold))+
+  geom_point(alpha=0.4, size=1.75) +
+  theme(legend.position="none") +
+  xlim(-10, 10)+
+  geom_hline(yintercept = -log10(0.05))+
+  geom_vline(xintercept = log2(2))+
+  geom_vline(xintercept = -log2(2))+
+  labs(x = "log2(FC)", y = "-log10(p.adj)", title = "TREATED vs BASAL")
+
+p1
+
+```
+
+
+The Volcano plot is a useful tool to identify the most significant features in the analysis. In this case the fold change and the pvalue, adjusted for false positives, are the criteria to keep with further identification of metabolic features. Our significant mZRT are those coloured in blue, that present a pvalue adjusted under 0.05 and a FC larger than two. It seems that the treatment induce a reduction of metabolite levels due that we find more blue dots at the left side of the graphic. That means that this features present a negative fold change or how many more times are present in one condition vs the other. In this case are less present in treated condition respect the basal one with values rounding five and ten times less.  
+
+
+
+
