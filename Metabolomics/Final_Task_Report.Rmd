@@ -1,0 +1,192 @@
+---
+title: "LC/MS(TOF) Data Analysis using XCMS"
+subtitle: "Metabolomics Final Task"
+author: "Alberto Dominguez"
+output:
+  pdf_document:
+    fig_width: 6
+    fig_height: 3
+    fig_caption: true
+---
+
+##Introduction
+
+
+Detection of metabolites in the diversity of life conditions may be one of the greatest challenges in the omics cascade. Unlike the rest, metabolomics is a widen scope that needs well defined pipelines yet. Regardless, different approaches have been developed so far. In current essay, we aimed to perform the so-called feature-oriented mass-spectrometry based metabolomics data analysis. Focused on a dataset consisting on 22 _mzXML_ files corresponding to HLPC-MS(TOF) measurements of serum samples at basal state, we ask the conditions after certain treatment.  Hundreds and thousands of metabolic features, peaks corresponding to individual ions with a unique mass-to-charge ratio and a unique retention time or _mzRT_ features, are obtained in this kind of studies.^1^ To handle with the whole amount of data produced, we lean on  [**Bioconductor**](http://bioconductor.org)^2^  available package _XCMS_^3^.It is important to notice that open-source software _XCMS_^3^ , acronym for various forms (X) of chromatography and mass spectrometry, allows us to deal with either open-source mass spectrometry data format _'mzXML'_ to develop a proper step-by-step data analysis pipeline. Also well-known open-source software *R* ^4^ (http://cran.r-project.org) is where all the process takes place except in a brief incursion in named metabolite database [**METLIN**](https://metlin.scripps.edu/metabo_batch.php). But for some kind of conclusion and identification of exact metabolite this is not enough. Comparing the retention time from a model and/or MS/MS trial are absolutely necessary to determine a single metabolite.^1^ Hence, we could talk about the essay as a process of continous filtering with different criteria, to end with a feasible list to check the presence of specific metabolite in our starting samples.
+
+##Methods
+
+An important attribute of above mentioned _XCMS_ package, is the capability to explore raw data files prior to start with the analysis itself. There are several plots usually accepted to display information about the samples such as _plotRaw_, *plotEIC* and _plotTIC_. The latter is shown in **Figure 1**, for a sample on TREATED group and for a sample of BASAL group. It should be understood as a summarized intensities representation of all mass spectral peaks detected at a certain time scan.  
+
+
+```{r echo=FALSE, include = FALSE}
+library(xcms)
+
+library(reshape)
+library(ggplot2)
+library(gridExtra)
+
+setwd("/home/biocloud/taskmetab")
+
+## Exploring raw data files
+
+list.files(pattern='[.]mzXML',recursive=TRUE)
+myraw_basal<-xcmsRaw(list.files(pattern='[.]mzXML',recursive=TRUE)[1])
+myraw_treated <- xcmsRaw(list.files(pattern = '[.]mzXML', recursive = TRUE)[14])
+```
+
+
+```{r echo = FALSE , fig.cap= "TICs for TREATED and BASAL conditions"}
+
+par(mfrow=c(1,2))
+xcms::plotTIC(myraw_treated)
+title(sub= "TREATED", col.sub = "darkmagenta")
+xcms::plotTIC(myraw_basal)
+title(sub= "BASAL", col.sub = "skyblue4")
+
+```
+
+
+At first glance, we notice two main differences between the two graphics. About the 500 seconds, the basal sample presents some intensities not seen it in the TREATED one. It seems that the treatment reduce the presence of some metabolites at that time, whereas around 1100-1200 seconds induce some, due to the emergence of a peak that rises to 1.0e+07 of intensity, better visualized in supplementary file of main figures. At the rest of time course it seems that same pattern is manteined for experimental conditions. Definitely, we can say that both samples look similar except for this exact points commented. 
+
+
+After a quick observation of the data with no processing, *XCMS* off-line analysis is performed with required parameters and conditions.
+
+__Peak Detection__: method = "CentWave"; ppm = 15; peakwidth min = 10; peakwidth max = 60
+
+
+__Retention Time Correction__: method = "obiwarp"; profStep = 1
+
+
+__Peak Grouping__: mzwid = 0.015; minfrac = 0.5; bw = 5
+
+
+Run the previous steps of peak detection, matching peaks, retention time correction, peak grouping and filling missing peaks, of note that this is the most time-consuming process, allows us to obtain an object with some interesting information displayed below figure 1.
+
+
+```{r  echo=FALSE}
+load('finalxsetobject.Rdata')
+finalxset
+```
+
+
+The whole process extends up to 30 minutes (1.6 - 1799 seconds) to adquire a mass range of 50.0292- 998.8469 m/z. The software counts an amount of 217037 peaks but what is interesting from a metabolomic point of view is the number of features produced. As known, a feature is defined as an ion with a unique mass-to-charge ratio and a unique retention time.^5^ The list of metabolic features or mzRTs is the starting point of the race to end with some specific metabolite names present in current serum samples. In this case, the number is setted at 7523 features found in 12 BASAL and 10 TREATED samples. 
+
+
+#Results
+
+As explained before, once we get the number of features a process of filtering is started. The first step, applied by Smilde et al.^6^, it's called the 80% rule. They consider that a variable will be kept if it has a non-zero value for at least 80% of the samples, in other words, we will take into consideration all features that present intensity values in the 80% of the samples. So applied in our data, we have to retain the 62'8% of the features, that is 4725 out of the initial 7523. It seems clear that other criterias should be applied to continuing with the feature list reduction. Attacking by the error introduced in processing and preparing samples and the intensity of the feature, understood as the mean intensity that reaches x counts, is the logical next procedure. 
+Although the ideal would be having quality control (QC) samples to handle with analytical variation^7^ in the next stair, Vinaixa et al.^1^ proposed as a rule of thumb, to discard those features showing less than 20% of CV since biological variation is below analytical variation threshold. Besides, in regards of intensity criteria, a threshold is set at 5000 counts according to previous experience due to the last step of metabolite identification, MS/MS that requires a minimun of intensity to produce reliable results. Merging intensity and CV criteria we find that nearly the 90% of features have to be discarted because only 556 fit with both conditions. At this point, it is convenient to take a look back to realize the different steps of filtering and the progressive loss of features in the path. A Venn-Diagram^8^ is shown below to perceive this succession. 
+
+```{r echo=FALSE, include=FALSE}
+
+load('finalxsetobject.Rdata')
+mzrttable <- data.frame(finalxset@groups)
+
+t <- which(mzrttable$BASAL>=10 | mzrttable$TREATED>=8)
+ftrtable <- mzrttable[t,]
+
+rownames(ftrtable) <- groupnames(finalxset)[t]
+X1 <- groupval(finalxset, value = "maxo")[t,]
+
+
+
+rownames(X1) <- groupnames(finalxset)[t]
+
+
+class <- as.factor(finalxset@phenoData$class)
+
+meanintensities <- t(apply(X1,1, function(x) tapply(x,class,mean)))
+rownames(meanintensities) <- groupnames(finalxset)[t]
+
+
+#Stablish intensity threshold value
+
+threshold <- 5000
+
+# Getting number of features with mean intensity above our threshold in at least one of the groups.
+
+idx_i <- rownames(meanintensities[apply(meanintensities,1,function(x) any(x>threshold)== TRUE),])
+
+
+## CVs 20%
+
+library(raster) # In library raster you find the function to calculate the coefficient of variation
+
+#Create a Data Frame containing intensity data
+
+D <- data.frame(X1)
+
+cl1 <- rep(c("Sample"), times = c(22))
+
+
+CV <- t(apply(D,1, function(x) tapply(x,cl1, cv)))
+idx_CV <- colnames (CV) [CV > 20]
+
+Ib <- intersect(idx_i, idx_CV)
+M2<-apply(meanintensities,2,sort,decreasing=TRUE)
+
+
+M2plot<-melt(M2)
+names(M2plot)<-c("Features","group","Intensity")
+library(VennDiagram)
+```
+
+```{r echo=FALSE, warning=FALSE , fig.width=5 , fig.height=2 , fig.cap= "Venn-Diagram of features filtering progression"}
+
+
+
+draw.triple.venn(area1 = length(Ib), area2 = dim(ftrtable)[1], area3 = dim(mzrttable)[1], n12 = length(Ib), n23 = dim(ftrtable)[1], n13 =length(Ib), cat.dist = c(0.01, 0, 0.025),
+                 n123 =length(Ib), lty=c(1,1,1), lwd=c(4,4,4),col=c("springgreen4", "yellow", "lightblue"),cat.col = c('black','blue','lightblue'), category = c('INTENSITY and QC', '80% RULE', 'INITIAL'),
+                 fill = c("springgreen4", "yellow", "lightblue"), rotation.degree = 90,cat.pos = c(-180, 40, 0), cat.cex = c(1,2,3))
+
+```
+
+Other important topic to take care of, is the presence of outliers in the samples of study. To check that, notorious representation of PCA and package _outliers_^9^ are combined to achive this goal. In addition, PCA allows a graphical image of any clustering tendency in the samples of interest. In this case, as commented in supplementary figures, samples seems to cluster around a principal component, each by experimental condition, what it was predictable. Recall that PCA is a mathematical algorithm that make it possible to visually assess similarities and differences between samples.^10^ Of note that almost the half of variance in the experiment is explained by the two first principal components, more exactly 47.9%, what it's a lot due to fact that the other 50% is explained by the other 20 components. Using PCA plot and package _outliers_ we check and confirm the presence of two outliers in BASAL samples, procedure available in provided *R* code. These to samples are no longer used in further analysis, so we end up this step with 10 BASAL samples and 10 TREATED samples.
+
+Even 90% of the initial features have been discarted, the limitation in the number of MS/MS experiments brings us to use statistical analysis to try to reduce more these 556 metabolite features. Two main approaches will be used to accomplish this mission. The statistical significance in terms of p-value with FDR correction and the Fold Change (FC) criteria, understood as the magnitude of difference between the two populations under study.^1^ Try to find significant features comparing TREATED and BASAL conditions is done by a one-variable-at a time t-test previously checked the variance argument. After obtaining the different p-value for each feature, a multiple testing correction must be applied in order to face the Type I error. It is well-known that Bonferroni correction would be more stringent^1^ but in our case we opt for a less strict analysis with False Discovery Rate or FDR. Joining a qvalue (the p-value corrected) less than 0.05 and a FC larger than 2, i.e. a single feature doubling or more its presence in one condition in front the other, we end the statistical analysis with 88 features. Quite explainatory representation is provided by the Volcano plot appended in supplementary figures. Coloured in blue we find filtered 88 features, of now on to continue with database matching. As commented in the supplementary pdf, it seems that the treatment induce a reduction in metabolite levels due to the fact that almost the vast majority of the blue dots are at the left side of the graphic or the negative Fold Change part. Once we got this 88 mzRT features ranked by absolute value of FC we are able to perform a batch search in [**METLIN**](https://metlin.scripps.edu/metabo_batch.php).
+
+To sum up, with the initial goal of inquiring how the serum basal samples behave with certain treatment and after a feature contious selection and filtering with diverse criteria, a list of 88 features arise and needs to be checked in metabolomics databases. Recall that, although this query is done, further MS/MS experiements are required to a solid metabolite identification. Qualitatively talking, as showed in diverse plots, e.g. TICs or Volcano Plot, this treatment seems to reduce the number of metabolite levels in serum samples. 
+
+***
+
+
+#References
+
+[1] Maria Vinaixa, Sara Samino, Isabel Saez, Jordi Duran, Joan J. Guinovart, and Oscar Yanes.
+A guideline to univariate statistical analysis for LC/MS-Based untargeted metabolomics-derived
+data. Metabolites, 2(4):775{795, October 2012. doi: 10.3390/metabo2040775.
+
+
+[2]Gentleman R.C., Carey V.J., Bates D.M., Bolstad B., Dettling M., Dudoit S., Ellis B., Gautier L., Ge Y., Gentry J., Hornik K., Hothorn T., Huber W., Iacus S., Irizarry R., Leisch F., Li C., Maechler M., Rossini A.J., Sawitzki G., Smith C., Smyth G., Tierney L., Yang J.Y. and Zhang J. (2004) Bioconductor: open software development for computational biology and bioinformatics. Genome Biol. 5(10): R80.
+
+
+[3]Smith, C.A. and Want, E.J. and O'Maille, G. and Abagyan,R. and Siuzdak, G.: XCMS: Processing mass
+  spectrometry data for metabolite profiling using nonlinear peak alignment, matching and identification,
+  Analytical Chemistry, 78:779-787 (2006)
+
+
+[4] R Development Core Team (2008). R: A language and environment for statistical computing. R Foundation for Statistical Computing, Vienna, Austria. ISBN 3-900051-07-0, URL http://www.R-project.org.
+
+
+[5]Nikolskiy, I., Mahieu, N. G., Chen, Y., Tautenhahn, R., & Patti, G. J. (2013). An Untargeted Metabolomic Workflow to Improve Structural Characterization of Metabolites. Analytical Chemistry, 85(16), 7713–7719. http://doi.org/10.1021/ac400751j
+
+
+[6] Smilde A. K., van der Werf M. J., Bijlsma S., van der Werff-van der Vat B. J., Jellema R. H. (2005). Fusion of mass spectrometry-based metabolomics data. Anal. Chem. 77, 6729–6736. 10.1021/ac051080y 
+
+
+[7] Dunn, W.B.; Broadhurst, D.; Begley, P.; Zelena, E.; Francis-McIntyre, S.; Anderson, N.; Brown,
+M.; Knowles, J.D.; Halsall, A.; Haselden, J.N.; et al. Procedures for large-scale metabolic
+profiling of serum and plasma using gas chromatography and liquid chromatography coupled to
+mass spectrometry. Nat. Prot. 2011, 6, 1060–1083.
+
+
+[8]Hanbo Chen (2016). VennDiagram: Generate High-Resolution Venn and Euler Plots. R package version 1.6.17. http://CRAN.R-project.org/package=VennDiagram. 
+
+
+[9]Lukasz Komsta (2011). outliers: Tests for outliers. R package version 0.14. http://CRAN.R-project.org/package=outliers
+  
+
+[10]Ringner, M. What is principal component analysis? Nat. Biotechnol. 26, 303–304 (2008).
+
+
