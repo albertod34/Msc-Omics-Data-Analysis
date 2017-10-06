@@ -271,7 +271,6 @@ performance(prediction_c,"auc") #calculate the area under the curve
     #to built our model and we test it in best.model.
 
 
-
 #14.	For each variable "genei", i=1, ., 20, define a new factor variable "levels.genei" with 
 #values "high" if gene levels are positive or zero and "low" if gene levels are negative. 
 
