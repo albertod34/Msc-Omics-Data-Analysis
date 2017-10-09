@@ -1,0 +1,148 @@
+---
+title: "Do Human Proteins Coopted By Pathongens Share Some Special Feature?"
+author: "Alberto Dominguez"
+date: "12 juny de 2016"
+output:
+  pdf_document:
+    fig_width: 7
+    fig_height: 3
+    fig_caption: true
+---
+
+***
+
+#Introduction
+
+The study of interactions among different species, as well as all the scopes in science, requires the ability of inquiring specific questions. In this case we wonder or we try to get some conclusions when we face the process of cooptation of human proteins by pathogenic entities. Cooptation should be understood as the process by which the viral protein interacts with a human protein and is able to modify the fuction of the human protein to make it work for the virus life cycle. Our goal is to compare two different random selected viruses and to seek and infer what they have in common and what they not, in cooptation process. More concretely, the species selected are *Dengue virus type 2 (strain Thailand/NGS-C/1944) (DENV-2)* and *Zaire ebolavirus (strain Mayinga-76)*. Data are obtained from [*IntAct*](http://www.ebi.ac.uk/intact/) database, an [*EMBL-EBI*](http://www.ebi.ac.uk/) repository, that provides freely available information about molecular interaction. Of note it's a database in constant growing, so reproducible analysis might be different due to time course.
+
+#Methods
+
+With [*R*](https://cran.r-project.org/)s software help and useful *igraph* package, the analysis starts with graphical representation of both virus interaction networks with human proteins. A network has to be seen as an illustration of pairwise relationships of the different 'actors', in our case viral and human proteins, of study. Plots provided below to have an image of the network. 
+
+```{r echo=FALSE, include = FALSE}
+
+setwd('C:/Users/alber/Alberto/M�ster Omics/Interactomics/JPlanas/ftask/')
+library(igraph)
+load('intactobject.Rdata')
+
+HDenpos<- which(intact[,10] =="taxid:9606(human)|taxid:9606(Homo sapiens)" & intact[,11] == "taxid:11065(den2n)|taxid:11065(\"Dengue virus type 2 (strain Thailand/NGS-C/1944) (DENV-2)\")" )
+HDenpos_rev<- which(intact[,11] =="taxid:9606(human)|taxid:9606(Homo sapiens)" & intact[,10] =="taxid:11065(den2n)|taxid:11065(\"Dengue virus type 2 (strain Thailand/NGS-C/1944) (DENV-2)\")" )
+
+Human_Dengue<- intact[HDenpos,]
+  
+Dengue_Human<- intact[HDenpos_rev,]
+
+# getting only protein IDs
+
+HD<- Human_Dengue[,c(1,2)]
+DH<- Dengue_Human[,c(1,2)]
+
+
+HinterwDengue<- rbind(DH,HD)
+
+
+Hebpos<- which(intact[,10] =="taxid:9606(human)|taxid:9606(Homo sapiens)" &intact[,11] == "taxid:128952(ebozm)|taxid:128952(\"Zaire ebolavirus (strain Mayinga-76)\")" )
+
+Heb_rev<- which(intact[,11] =="taxid:9606(human)|taxid:9606(Homo sapiens)" &intact[,10] =="taxid:128952(ebozm)|taxid:128952(\"Zaire ebolavirus (strain Mayinga-76)\")" )
+
+Human_zeb<- intact[Hebpos,]
+
+zeb_Human<- intact[Heb_rev,]
+
+Hzeb<- Human_zeb[,c(1,2)]
+zebH<- zeb_Human[,c(1,2)]
+
+
+Hinterwzebola<- rbind(Hzeb,zebH)
+
+```
+
+```{r echo= FALSE, fig.cap='Green dots correspond to Human-Dengue virus type 2 network and blue dots to Human - Zaire Ebola virus network'}
+par(mfrow=c(1,2))
+humden<-graph.data.frame(HinterwDengue,directed=F)
+plot(humden,vertex.label.color ='transparent',vertex.color='green',vertex.label.dist=1)
+humzeb<-graph.data.frame(Hinterwzebola,directed=F)
+plot(humzeb,vertex.label.color ='transparent',vertex.color='blue',vertex.label.dist=1)
+```
+
+
+Networks have two main components, nodes and edges. Nodes represent the proteins itself and edges are the lines that join this nodes and represent the interaction itself. Once a general vision of the network is obtained, we may ask about its components, centrality measures and recover  protein pathogen names as well as human protein names. Concrete R steps are attached in supplementary materials. After exploring this topics in human-pathogen networks, what it's interesting in order to get some conclusions about our main question, is to build a human-human protein interaction network and with proteins that interact with pathogen in previous networks, try to find some significant statistical difference among these two groups of human proteins.At first, we have to decide which centrality measures we will use as statistics of our following tests. In this case it is decided to use *degree* , *betweenness* and *closeness* that will give us diverse information in our analysis. The second step, should be knowing how the data is distributed to further apply the appropriate statistical method. In this case, it is used *Shapiro-Wilk Normality Test* as well as graphical representation. An example attached below.       
+
+```{r echo=FALSE, include=FALSE}
+sortedprots<-sort(degree(humden),decreasing = T)
+
+protshum<- names(sortedprots)[names(sortedprots)%in%unique(Human_Dengue[,1])]
+protshum2<-names(sortedprots)[names(sortedprots)%in%unique(Dengue_Human[,2])]#les que s�n humanes
+
+Human_protein_names<- unique(c(protshum,protshum2))
+
+sortedprots[Human_protein_names] #human proteins sorted by degree
+
+
+dengueprots<- names(sortedprots)[names(sortedprots)%in%Dengue_Human[,1]]#les que s�n de patogen
+dengueprots2<-names(sortedprots)[names(sortedprots)%in%unique(Human_Dengue[,2])] #patogen tb
+
+Dengue_protein_names<- unique(c(dengueprots,dengueprots2))
+
+sortedprots[Dengue_protein_names]
+
+sortedprots2<-sort(degree(humzeb),decreasing = T)
+
+protshumz<- names(sortedprots2)[names(sortedprots2)%in%unique(Human_zeb[,1])]
+protshumz2<-names(sortedprots2)[names(sortedprots2)%in%unique(zeb_Human[,2])]#les que s�n humanes
+
+Human_protein_namesZ<- unique(c(protshumz,protshumz2))
+
+sortedprots2[Human_protein_namesZ] #human proteins sorted by degree
+
+
+sortedprots2[Human_protein_namesZ][1:10] #top ten human proteins
+
+
+ebolaprots<- names(sortedprots2)[names(sortedprots2)%in%zeb_Human[,1]]#les que s�n de patogen
+ebolaprots2<-names(sortedprots2)[names(sortedprots2)%in%unique(Human_zeb[,2])] #patogen tb
+
+Ebola_protein_names<- unique(c(ebolaprots,ebolaprots2))
+
+sortedprots2[Ebola_protein_names] #ebola proteins sorted by degree
+
+
+
+human_proteins_interwith_pathogens<- unique(c(Human_protein_namesZ,Human_protein_names))
+
+
+hh<- which(intact[,10] =="taxid:9606(human)|taxid:9606(Homo sapiens)" & intact[,11] == "taxid:9606(human)|taxid:9606(Homo sapiens)" )
+Hum_Hum<- intact[hh,] 
+HH<- Hum_Hum[,c(1,2)]
+
+huhu<-graph.data.frame(HH,directed=F)
+```
+
+```{r echo=FALSE, fig.cap= 'Graphical representation of data distribution in degree of proteins interacting with pathogens'}
+
+hist(degree(huhu)[human_proteins_interwith_pathogens])
+```
+
+Successively of noticing that all kind of data distribution was not normally distributed, *Wilcoxon Test* is the choice to find differences. Here some clarification has to be done. When we set an statistical hypothesis test, we have to define clearly, what we are looking for, i.e. what are our hypothesis. In our case, we are interested in finding differences between human proteins coopted by pathogens and human proteins not coopted by pathogens. From our point of view, it's not relevant which group shows, for instance, high values in centrality measures because our aim is to find differences. This is the reason why the argument *alternative*, in the *Wilcoxon Test* function, has to be defined as *'two.sided'*. Then, several previously mentioned test are performed with statistics of interest. Results are discussed in the following section.
+
+
+#Results
+
+First network analyzed was *Dengue type 2* case. Conformed by two components(6 and 9 nodes each), each set of nodes that can be reached walking through edges, we notice that 15 proteins are interconnected by 31 edges. As explained before some centrality measures are obtained to understand the role of every node and how the relationship with others is. *Degree* is the simplest one and tells us about the number of edges of each node, that is, who has more interactions. After measure other parameters of centrality, *eingenvalue* (it values the importance of node connection quality), *betweenness* (calculates the number of shortest paths passing thru a certain node) and *closeness* (assess speed of information transfer, which nodes are better connected with the rest), we perform a ranking of proteins by *degree* and by type.
+We notice then that *Dengue type 2* pathogen protein *uniprotkb:*[*P14340*](http://www.uniprot.org/uniprot/P14340) in its post-postranslational modifications *P14340-PRO_0000037966* is the protein that gathers higher network centrality values. From a biological point of view this is what expected, in the sense that, the pathogen is trying to use human proteins for its benefit so it has to interact with all proteins that may be useful for its purpose.
+
+Second network *Zaire ebolavirus*, counts 97 proteins and 130 edges in a single component net. After performing appointed centrality measures we obtain similar results as previous network analysis. In this case *Zaire ebolavirus* presents two proteins, *uniprotkb:*[*Q05127*](http://www.uniprot.org/uniprot/Q05127) and *uniprotkb:*[*Q05322*](http://www.uniprot.org/uniprot/Q05322), being the first one the one that present highest centrality values. Analysing the second network it empowers what told about first case, the idea that pathogen proteins are the relevant keys of its networks because they are invading an organism and will use all the machinery they need to carry on with its cycle. 
+
+Once concrete analysis of pathogen networks is done, it allows us to obtain a group of proteins that interact with pathogens, merging so-called proteins of previous two pathogen networks. With already explained construction of human-human protein interaction network we proceed with the aim to find if we can differentiate those two groups of human proteins. And certainly we have to. In all of the three *Wilcoxon* tests, with threee different statistics (*degree*,*betweenness* and *closeness*), the result is exactly the same. With p-values below 2.2e-16 it seems that it is pertinent splitting these two groups. Is not a ridiculous to say that some selective pressure may be acting out in human proteins to make it more prone to viral attacks. So, answering the main question of our analysis we can assure that human proteins coopted by pathogens share some special feature. Following with the analysis in order to get deeper conclusions, we randomly select some human proteins coopted by pathogens displayed below:
+
+[**P07437**](http://www.uniprot.org/uniprot/P07437)
+
+[**P52294**](http://www.uniprot.org/uniprot/P52294)
+
+[**Q99880**](http://www.uniprot.org/uniprot/Q99880)
+
+[**Q16778**](http://www.uniprot.org/uniprot/Q16778)
+
+[**P12036**](http://www.uniprot.org/uniprot/P12036)
+
+By clicking over uniprot symbol, we are able to browse in [*Uniprot*](http://www.uniprot.org/) database, a large curated database gathering complete information about proteins. Looking these five exemples obviously we cannot draw conclusions with only 5 cases but we can draw tendencies. Referring to sequence length we denote that a high variability does exist. 1026 and 126 amino-acids are too different sizes to draw any tendency. As well as before, talking about subcellular location we find locations as different as chromosome, cytoskeleton, cytoplasm, nucleus, mytochondrion or neurofibrillary tangles. And finally in topics such as protein structure, families and domains or the expression, there's an important lack of information that makes no possible visualization of any kind of tendency.
